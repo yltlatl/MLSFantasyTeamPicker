@@ -8,10 +8,19 @@ namespace MLSFantasyTeamPicker
 {
     class DataLoadAndFilter
     {
+        #region Constructors
         //load a text file
+        public DataLoadAndFilter(string path)
+        {
+            
+        }
 
         //load data from a sql db
 
+        #endregion
+        
         //map fields to the fields used by the program
+
+
     }
 }
