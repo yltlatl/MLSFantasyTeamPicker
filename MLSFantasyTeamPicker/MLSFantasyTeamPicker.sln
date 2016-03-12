@@ -5,6 +5,8 @@ VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLSFantasyTeamPicker", "MLSFantasyTeamPicker\MLSFantasyTeamPicker.csproj", "{BF2C28B0-357D-4DBC-894B-D2E8BDF5693E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DelimitedFileLibrary", "..\..\DelimitedFileLibrary\DelimitedFileLibrary\DelimitedFileLibrary.csproj", "{F66FBA99-4504-4D6F-A6C9-A117581EB268}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{BF2C28B0-357D-4DBC-894B-D2E8BDF5693E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BF2C28B0-357D-4DBC-894B-D2E8BDF5693E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BF2C28B0-357D-4DBC-894B-D2E8BDF5693E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F66FBA99-4504-4D6F-A6C9-A117581EB268}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F66FBA99-4504-4D6F-A6C9-A117581EB268}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F66FBA99-4504-4D6F-A6C9-A117581EB268}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F66FBA99-4504-4D6F-A6C9-A117581EB268}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
