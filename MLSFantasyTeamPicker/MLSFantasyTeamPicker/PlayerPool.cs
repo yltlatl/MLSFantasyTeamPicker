@@ -6,29 +6,16 @@ using System.Threading.Tasks;
 
 namespace MLSFantasyTeamPicker
 {
-    class PlayerPool
+    internal class PlayerPool
     {
         #region Constructors
 
-        //must have an argless constructor because Team inherits from PlayerPool.
         public PlayerPool()
         {
             Members = new List<Player>();
-            DiscardedPlayers = new List<Player>();
+            InjuredPlayers = new List<Player>();
         }
         
-        public PlayerPool(double targetBudget, double goalieBudgetWeight, double defenderBudgetWeight, double midfielderBudgetWeight, double forwardBudgetWeight)
-            : this()
-        {
-            TargetTeam = new Team(targetBudget, goalieBudgetWeight, defenderBudgetWeight, midfielderBudgetWeight,
-                forwardBudgetWeight);
-        }
-
-        public PlayerPool(Player player)
-            : this()
-        {
-            Members.Add(player);
-        }
 
         public PlayerPool(List<Player> players)
             : this()
@@ -41,24 +28,50 @@ namespace MLSFantasyTeamPicker
         #region Properties
         public List<Player> Members { get; private set; }
 
-        public Team TargetTeam { get; private set; }
-
-        public List<Player> DiscardedPlayers { get; private set; } 
+        public List<Player> InjuredPlayers { get; private set; } 
 
         #endregion
 
         #region Methods
 
 
-        public void PickNextBestTeam(double totalBudget, double goalieBudget, double defenderBudget, double midfielderBudget, double forwardBudget, SearchStrategy searchStrategy)
+        public Team PickNextBestTeam(Team team, SearchStrategy searchStrategy)
         {
-            
-            PickNextBestPlayerList("GK", goalieBudget, searchStrategy);
-            PickNextBestPlayerList("DF", defenderBudget, searchStrategy);
-            PickNextBestPlayerList("MF", midfielderBudget, searchStrategy);
-            PickNextBestPlayerList("FW", forwardBudget, searchStrategy);
+            var ineligiblePlayers = team.Members;
+            foreach (var injuredPlayer in InjuredPlayers.Where(injuredPlayer => !ineligiblePlayers.Contains(injuredPlayer)))
+                ineligiblePlayers.Add(injuredPlayer);
+
+            team = PickNextBestPlayerList(team.GoalieBudget, searchStrategy, Team.GoalieCount,
+                GetEligiblePlayers(team.GoalieBudget, ineligiblePlayers, "GK"), team);
+
+            team = PickNextBestPlayerList(team.DefenderBudget, searchStrategy, Team.DefenderCount,
+                GetEligiblePlayers(team.DefenderBudget, ineligiblePlayers, "DF"), team);
+
+            team = PickNextBestPlayerList(team.MidfielderBudget, searchStrategy,
+                Team.MidfielderCount, GetEligiblePlayers(team.MidfielderBudget, ineligiblePlayers, "MF"), team);
+
+            team = PickNextBestPlayerList(team.ForwardBudget, searchStrategy, Team.ForwardCount,
+                GetEligiblePlayers(team.ForwardBudget, ineligiblePlayers, "FW"), team);
+
+            return team;
         }
 
+
+        private List<Player> GetEligiblePlayers(double budget, IEnumerable<Player> ineligiblePlayers, string position = null)
+        {
+            var retVal = position == null ? Members : Members.Where(m => m.Position.Equals(position)).ToList();
+
+            if (retVal.Count == 0) throw new ArgumentException("Position not found.", position);
+
+            retVal.RemoveAll(p => p.OperativePrice > budget);
+
+            foreach (var player in from player in retVal from ineligiblePlayer in ineligiblePlayers.Where(ineligiblePlayer => player == ineligiblePlayer) select player)
+            {
+                retVal.Remove(player);
+            }
+
+            return retVal;
+        }
 
         //get the available budget for the player class
         //select two best values out of the players that are (individually) cheaper than the budget
@@ -67,102 +80,71 @@ namespace MLSFantasyTeamPicker
         //1. discard the most expensive player and add the next cheapest player with highest value, or
         //2. discard the median expensive player and add the next cheapest player with highest value
         //repeat the strategy until the budget test is met
-        private void PickNextBestPlayerList(string position, double budget, SearchStrategy searchStrategy)
+        private static Team PickNextBestPlayerList(double budget, SearchStrategy searchStrategy, int playerCount, List<Player> eligiblePlayers, Team team)
         {
-            var eligiblePlayers = new List<Player>();
-            
-            foreach (var member in Members.Where(member => member.Position.Equals(position) && member.Price < budget))
+            while (true)
             {
-                if (DiscardedPlayers.Count == 0)
+                eligiblePlayers.Sort(CompareByOperativeStatistic);
+                var nextBestPlayers = eligiblePlayers.Take(playerCount).ToList();
+                foreach (var eligiblePlayer in team.ReplacePlayers(nextBestPlayers).SelectMany(replacedPlayer => eligiblePlayers.Where(eligiblePlayer => eligiblePlayer == replacedPlayer)))
                 {
-                    eligiblePlayers.Add(member);
+                    eligiblePlayers.Remove(eligiblePlayer);
                 }
-                else
-                {
-                    eligiblePlayers.AddRange(from discardedPlayer in DiscardedPlayers where member != discardedPlayer select member);
-                }
-            }
 
-            var nextBestPlayerCount = new int();
-
-            switch (position)
-            {
-                case "GK":
-                    nextBestPlayerCount = Team.GoalieCount;
-                    break;
-                case "DF":
-                    nextBestPlayerCount = Team.DefenderCount;
-                    break;
-                case "MF":
-                    nextBestPlayerCount = Team.ForwardCount;
-                    break;
-                case "FW":
-                    nextBestPlayerCount = Team.ForwardCount;
-                    break;
-                default:
-                    throw new ArgumentException("Invalid position.", "position");
-            }
-            
-            eligiblePlayers.Sort(CompareByValue);
-            var nextBestPlayers = eligiblePlayers.Take(nextBestPlayerCount).ToList();
-            DiscardedPlayers.AddRange(TargetTeam.ReplacePlayers(nextBestPlayers));
-            if (nextBestPlayers.Sum(g => g.Price) > budget)
-            {
-                nextBestPlayers.Sort(CompareByPrice);
+                if ((nextBestPlayers.Sum(g => g.OperativePrice) <= budget)) return team;
+                nextBestPlayers.Sort(CompareByOperativePrice);
                 if (searchStrategy == SearchStrategy.DiscardMostExpensive)
                 {
-                    DiscardedPlayers.Add(nextBestPlayers.First());
+                    eligiblePlayers.Remove(nextBestPlayers.First());
                 }
                 else
                 {
                     if (nextBestPlayers.Count%2 != 0)
                     {
-                        var indexToRemove = (int) Math.Ceiling((double)nextBestPlayers.Count/2) - 1;
-                        DiscardedPlayers.Add(nextBestPlayers[indexToRemove]);
+                        var indexToRemove = (int) Math.Ceiling((double) nextBestPlayers.Count/2) - 1;
+                        eligiblePlayers.Remove(nextBestPlayers[indexToRemove]);
                     }
                     else
                     {
                         var lowIndex = nextBestPlayers.Count/2;
-                        var median = nextBestPlayers[lowIndex].Price + nextBestPlayers[lowIndex + 1].Price/2;
-                        var highPriceDistance = Math.Abs(nextBestPlayers[lowIndex].Price - median);
-                        var lowPriceDistance = Math.Abs(nextBestPlayers[lowIndex + 1].Price - median);
+                        var median = nextBestPlayers[lowIndex].OperativePrice + nextBestPlayers[lowIndex + 1].OperativePrice/2;
+                        var highPriceDistance = Math.Abs(nextBestPlayers[lowIndex].OperativePrice - median);
+                        var lowPriceDistance = Math.Abs(nextBestPlayers[lowIndex + 1].OperativePrice - median);
                         if (highPriceDistance >= lowPriceDistance)
                         {
-                            DiscardedPlayers.Add(nextBestPlayers[lowIndex + 1]);
+                            eligiblePlayers.Remove(nextBestPlayers[lowIndex + 1]);
                         }
                         else
                         {
-                            DiscardedPlayers.Add(nextBestPlayers[lowIndex]);
+                            eligiblePlayers.Remove(nextBestPlayers[lowIndex]);
                         }
                     }
                 }
-                PickNextBestPlayerList(position, budget, searchStrategy);
             }
-            return nextBestPlayers;
         }
 
-        public static int CompareByValue(Player player1, Player player2)
+        public static int CompareByOperativeStatistic(Player player1, Player player2)
         {
             if (player1 == null && player2 == null) return 0;
             if (player1 == null) return 1;
             if (player2 == null) return -1;
             
-            var value1 = player1.Value;
-            var value2 = player2.Value;
+            var value1 = player1.OperativeStatistic;
+            var value2 = player2.OperativeStatistic;
             if (Math.Abs(value1 - value2) < .0001) return 0;
             if (value1 > value2) return -1;
             if (value1 < value2) return 1;
             return 0;
         }
 
-        public static int CompareByPrice(Player player1, Player player2)
+        public static int CompareByOperativePrice(Player player1, Player player2)
         {
             if (player1 == null && player2 == null) return 0;
             if (player1 == null) return 1;
             if (player2 == null) return -1;
 
-            var value1 = player1.Price;
-            var value2 = player2.Price;
+            var value1 = player1.OperativePrice;
+            var value2 = player2.OperativePrice;
             if (Math.Abs(value1 - value2) < .0001) return 0;
             if (value1 > value2) return -1;
             if (value1 < value2) return 1;
